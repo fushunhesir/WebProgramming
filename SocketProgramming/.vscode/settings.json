@@ -3,6 +3,7 @@
     "java.project.outputPath": "bin",
     "java.project.referencedLibraries": [
         "lib/**/*.jar",
-        "/Users/macbook/Projects/WebProgramming/json-20230227.jar"
+        "/Users/macbook/Projects/WebProgramming/json-20230227.jar",
+        "d:\\projects\\WebProgramming\\json-20230227.jar"
     ]
 }

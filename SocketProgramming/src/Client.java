@@ -2,16 +2,12 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import org.json.*;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 public class Client {
     private static final String SERVER_HOST = "localhost";
     private static final int SERVER_PORT = 12345;
-
-    private static final String USERNAME_KEY = "username";
-    private static final String PASSWORD_KEY = "password";
-    private static final String SUCCESS_KEY = "success";
-    private static final String MESSAGE_KEY = "message";
 
     private static Scanner scanner = new Scanner(System.in);
 
@@ -52,15 +48,10 @@ public class Client {
         String username = scanner.nextLine();
         System.out.print("Enter password: ");
         String password = scanner.nextLine();
-
         byte[] msg= createRequestMsg("register", username, password);
         sendMessage(socket, msg);
-        String responseMsg = receiveMessage(socket);
-        data = parseResponseMsg(responseMsg);
 
-
-        String message = data.get(MESSAGE_KEY);
-        System.out.println(message);
+        receiveAndparseResponseMsg(socket);
     }
     
     private static void login(Socket socket) throws IOException {
@@ -72,15 +63,7 @@ public class Client {
         byte[] msg = createRequestMsg("login", username, password);
         sendMessage(socket, msg);
     
-        String responseMsg = receiveMessage(socket);
-        data = parseResponseMsg(responseMsg);
-        boolean success = Boolean.parseBoolean(data.get(SUCCESS_KEY));
-        String message = data.get(MESSAGE_KEY);
-        if (success) {
-            System.out.println("Login successful");
-        } else {
-            System.out.println("Login failed: " + message);
-        }
+        receiveAndparseResponseMsg(socket);
     }
     
     private static byte[] createRequestMsg(String action, String username, String password) throws IOException {
@@ -104,37 +87,48 @@ public class Client {
         outputStream.write(message);
     }
     
-    private static byte[] receiveMessage(Socket socket) throws IOException {
-        byte[] msg = new byte[73];
-        InputStream inputStream = socket.getInputStream();
-        inputStream.read(msg);
-        return msg;
-    }
-    
-    private static Map<String, String> parseResponseMsg(String message) {
-        Map<String, String> data = new HashMap<>();
-        try {
-            JSONObject json = new JSONObject(message);
-            Iterator<String> keys = json.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                String value = json.getString(key);
-                data.put(key, value);
-            }
-        } catch (JSONException e) {
-            System.err.println("Error parsing message: " + e.getMessage());
+    private static void receiveAndparseResponseMsg(Socket socket) throws IOException{
+        // 读取包头
+        InputStream in = socket.getInputStream();
+        byte[] header = new byte[8];
+        in.read(header);
+
+        // 解析包头中的数据包长度和类型
+        int messageLength = byteArrayToInt(header, 0);
+        int messageType = byteArrayToInt(header, 4);
+
+        // 读取包体
+        byte[] body = new byte[65];
+        in.read(body);
+
+        // 解析包体中的状态和描述
+        String status = new String(body, 0, 1, "UTF-8").trim();
+        System.out.println("response status: " + status);
+        String discription = new String(body, 1, 64, "UTF-8").trim();
+        System.out.println("response description: " + status);
+
+        if(status.equals("1") && messageType == 2){
+            System.out.println("register succeed!");
+        } else if(status.equals("1") && messageType == 4){
+            System.out.println("login succeed!");
+        } else if(status.equals("0") && messageType == 1){
+            System.out.println(discription);
+        } else {
+            System.out.println(discription);
         }
-        return data;
     }
 
     // 将int类型的值转换成4字节的byte数组
     public static byte[] intToByteArray(int value) {
-        byte[] byteArray = new byte[4];
-        byteArray[0] = (byte) (value >> 24);
-        byteArray[1] = (byte) (value >> 16);
-        byteArray[2] = (byte) (value >> 8);
-        byteArray[3] = (byte) value;
+        byte[] byteArray = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(value).array();
         return byteArray;
     }
+
+    public static int byteArrayToInt(byte[] byteArray, int pos) {
+        int result = 0;
+        byte[] src = Arrays.copyOfRange(byteArray, pos, pos+4);
+        result = ByteBuffer.wrap(src).order(ByteOrder.BIG_ENDIAN).getInt();
+        return result;
+    }    
 }
     
