@@ -3,6 +3,7 @@ import java.net.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -16,6 +17,7 @@ public class Server {
     private static final int LOGIN_RESPONSE_MSG = 4;
     private static final int STATUS_LEN = 1;
     private static final int HEADER_LEN = 8;
+    private static final int BODY_LEN = 50;
 
     private static Map<String, String> passwdMap = new HashMap<>();
 
@@ -31,25 +33,40 @@ public class Server {
                 // Handle client request in a new thread
                 new Thread(() -> {
                     try {
-                        // ¶ÁÈ¡°üÍ·
+                        // ï¿½ï¿½È¡ï¿½ï¿½Í·
                         InputStream in = socket.getInputStream();
                         byte[] header = new byte[8];
-                        byte[] body = new byte[50];
+                        byte[] body = new byte[BODY_LEN];
 
                         while (true) {
-                            in.read(header);
+                            int read_len = in.read(header);
+                            while(read_len < HEADER_LEN){
+                                int delta = in.read(header, read_len, header.length - read_len);
+                                if(delta == -1) break;
+                                read_len += delta;
+                            }
+                            if(read_len < HEADER_LEN){
+                                System.out.println("read: encounter an end");
+                                continue;
+                            }
 
-                            // ½âÎö°üÍ·ÖÐµÄÊý¾Ý°ü³¤¶ÈºÍÀàÐÍ
+                            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½Ðµï¿½ï¿½ï¿½ï¿½Ý°ï¿½ï¿½ï¿½ï¿½Èºï¿½ï¿½ï¿½ï¿½ï¿½
                             int messageLength = byteArrayToInt(header, 0);
                             int messageType = byteArrayToInt(header, 4);
-                            System.out.println(messageLength);
-                            System.out.println(messageType);
 
-                            // ¶ÁÈ¡°üÌå
-                            in.read(body);
-                            System.out.println(body.length);
+                            // ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½
+                            read_len = in.read(body);
+                            while(read_len < BODY_LEN){
+                                int delta = in.read(body, read_len, body.length - read_len);
+                                if(delta == -1) break;
+                                read_len += delta;
+                            }
+                            if(read_len < BODY_LEN){
+                                System.out.println("read: encounter an end");
+                                continue;
+                            }
 
-                            // ½âÎö°üÌåÖÐµÄ×´Ì¬ºÍÃèÊö
+                            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ðµï¿½×´Ì¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                             String username = new String(body, 0, 20, "UTF-8").trim();
                             String password = new String(body, 20, 30, "UTF-8").trim();
                             // Handle registration request
@@ -109,11 +126,11 @@ public class Server {
         int commandID = action == REGISTRATION_RESPONSE_MSG ? 2 : 4;
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        // °üÍ·Ð´Èë
+        // ï¿½ï¿½Í·Ð´ï¿½ï¿½
         baos.write(intToByteArray(totalLength));
         baos.write(intToByteArray(commandID));
         baos.write(status);
-        // °üÌåÐ´Èë
+        // ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½
         baos.write(String.format("%-64s", message).getBytes("UTF-8"));
 
         return baos.toByteArray();
@@ -174,7 +191,7 @@ public class Server {
         outputStream.write(message);
     }
 
-    // ½«intÀàÐÍµÄÖµ×ª»»³É4×Ö½ÚµÄbyteÊý×é
+    // ï¿½ï¿½intï¿½ï¿½ï¿½Íµï¿½Öµ×ªï¿½ï¿½ï¿½ï¿½4ï¿½Ö½Úµï¿½byteï¿½ï¿½ï¿½ï¿½
     public static byte[] intToByteArray(int value) {
         byte[] byteArray = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(value).array();
         return byteArray;

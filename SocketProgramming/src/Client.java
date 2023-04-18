@@ -8,6 +8,8 @@ import java.nio.ByteOrder;
 public class Client {
     private static final String SERVER_HOST = "localhost";
     private static final int SERVER_PORT = 12345;
+    private static final int HEADER_LEN = 8;
+    private static final int BODY_LEN = 65;
 
     private static Scanner scanner = new Scanner(System.in);
 
@@ -63,7 +65,9 @@ public class Client {
         byte[] msg = createRequestMsg("login", username, password);
         sendMessage(socket, msg);
     
-        receiveAndparseResponseMsg(socket);
+        if(receiveAndparseResponseMsg(socket) == -1){
+            System.out.println("receive msg: fail to read");
+        }
     }
     
     private static byte[] createRequestMsg(String action, String username, String password) throws IOException {
@@ -87,11 +91,15 @@ public class Client {
         outputStream.write(message);
     }
     
-    private static void receiveAndparseResponseMsg(Socket socket) throws IOException{
+    private static int receiveAndparseResponseMsg(Socket socket) throws IOException{
         // 读取包头
         InputStream in = socket.getInputStream();
         byte[] header = new byte[8];
-        in.read(header);
+        int read_len = in.read(header);
+
+        // insure the msg has been read correctly
+        while(read_len < HEADER_LEN)
+            read_len += in.read(header, read_len, header.length - read_len);
 
         // 解析包头中的数据包长度和类型
         int messageLength = byteArrayToInt(header, 0);
@@ -99,7 +107,16 @@ public class Client {
 
         // 读取包体
         byte[] body = new byte[65];
-        in.read(body);
+        read_len = in.read(body);
+        while(read_len < BODY_LEN){
+            int delta = in.read(body, read_len, body.length - read_len);
+            if(delta < 1) {
+                System.out.println("error msg");
+                break;
+            }
+            read_len += delta;
+        }
+        if(read_len < BODY_LEN) return -1;
 
         // 解析包体中的状态和描述
         String status = new String(body, 0, 1, "UTF-8").trim();
@@ -116,6 +133,7 @@ public class Client {
         } else {
             System.out.println(discription);
         }
+        return 0;
     }
 
     // 将int类型的值转换成4字节的byte数组

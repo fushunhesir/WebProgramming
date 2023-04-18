@@ -1,0 +1,4 @@
+/Users/macbook/Projects/WebProgramming/BlockSocket/build/CMakeFiles/client.dir
+/Users/macbook/Projects/WebProgramming/BlockSocket/build/CMakeFiles/server.dir
+/Users/macbook/Projects/WebProgramming/BlockSocket/build/CMakeFiles/edit_cache.dir
+/Users/macbook/Projects/WebProgramming/BlockSocket/build/CMakeFiles/rebuild_cache.dir
