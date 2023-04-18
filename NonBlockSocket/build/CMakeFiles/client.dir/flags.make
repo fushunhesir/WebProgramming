@@ -6,7 +6,7 @@ CXX_DEFINES =
 
 CXX_INCLUDES = -I/Users/macbook/Projects/WebProgramming/NonBlockSocket/include
 
-CXX_FLAGSarm64 =  -g -std=c++11 -gdbx -Wall -pedantic -g -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -mmacosx-version-min=12.6
+CXX_FLAGSarm64 =  -g -std=c++11 -Wall -pedantic -g -g -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -mmacosx-version-min=12.6
 
-CXX_FLAGS =  -g -std=c++11 -gdbx -Wall -pedantic -g -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -mmacosx-version-min=12.6
+CXX_FLAGS =  -g -std=c++11 -Wall -pedantic -g -g -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -mmacosx-version-min=12.6
 

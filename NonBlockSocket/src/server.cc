@@ -14,10 +14,12 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #define QUEUE_SIZE              10
 #define PORT                    "12345"
 #define BUF_SIZE                1024
+#define FILE_PATH               "./moive/src.mkv"
 
 void sigchld_handler(int s)
 {
@@ -44,7 +46,8 @@ int create_bind_socket(addrinfo* srvinfo, addrinfo* selected){
     int yes = 1;
 
     for(selected = srvinfo; selected != nullptr; selected = selected->ai_next){
-        if((sd = socket(selected->ai_family, selected->ai_socktype, selected->ai_protocol)) == -1){
+        if((sd = socket(selected->ai_family, selected->ai_socktype, 
+        selected->ai_protocol)) == -1){
             fprintf(stderr, "socket: fail to allocate socket\n");
             continue;
         }
@@ -65,34 +68,66 @@ int create_bind_socket(addrinfo* srvinfo, addrinfo* selected){
     return sd;
 }
 
-int main(void){
+int get_listener() {
     int sd;
-    int status;
+    addrinfo hints, *srvinfo, *selected;
+
+    sethints(AF_INET, AI_PASSIVE, SOCK_STREAM, hints);
+    if(getaddrinfo(nullptr, PORT, &hints, &srvinfo) != 0){
+        fprintf(stderr, "getaddrinfo: fail\n");
+        return 1;
+    } 
+    sd = create_bind_socket(srvinfo, selected);
+    return sd;
+}
+
+int client_handler(int sd) {
+    fd_set wtset;
+    char buffer[BUF_SIZE];
+    int remains = 0;
+    
+    FD_ZERO(&wtset);
+    FD_SET(sd, &wtset);
+
+    while(1) {
+        if(select(sd + 1, nullptr, &wtset, nullptr, nullptr) == -1){
+            perror("thread select");
+            exit(0);
+        }
+        std::ifstream file(FILE_PATH, std::ios::binary);
+        while(file.read(buffer + remains, BUF_SIZE - remains));{
+            int num = send(sd, buffer, BUF_SIZE, 0);
+            if(num < BUF_SIZE) {
+                memmove(buffer, buffer + num, BUF_SIZE - num);
+                remains = BUF_SIZE - num;
+                break;
+            }
+        }
+        if(file.eof()) break;
+    }
+    return 0;
+}
+
+int main(void){
+    int listener;
     int fdmax;
     int new_fd;
     char ip[INET_ADDRSTRLEN];
-    fd_set master, rdset;
+    fd_set r_master, w_master,rdset, wtset;
 
     socklen_t sin_size;
     struct sigaction sa;
     sockaddr_storage visiter;
-    addrinfo hints, *srvinfo, *selected;
 
-    sethints(AF_INET, AI_PASSIVE, SOCK_STREAM, hints);
+    listener = get_listener();
+    
 
-    if((status = getaddrinfo(nullptr, PORT, &hints, &srvinfo)) != 0){
-        fprintf(stderr, "getaddrinfo: fail\n");
-        return 1;
-    } 
-
-    sd = create_bind_socket(srvinfo, selected);
-
-    if(listen(sd, QUEUE_SIZE) == -1){
+    if(listen(listener, QUEUE_SIZE) == -1){
         fprintf(stderr, "listen: fail to listen\n");
         return 1;
     }
 
-
+    // handle sigchild
     sa.sa_handler = sigchld_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
@@ -104,64 +139,40 @@ int main(void){
 
     printf("server: waiting for connections...\n");
 
-    FD_ZERO(&master);
+    FD_ZERO(&r_master);
     FD_ZERO(&rdset);
-    FD_SET(sd, &master);
-    fdmax = sd + 1;
+    FD_ZERO(&w_master);
+    FD_ZERO(&wtset);
+    FD_SET(listener, &r_master);
+    fdmax = listener + 1;
 
     while(1){
-        rdset = master;
-        if(select(fdmax, &rdset, nullptr, nullptr, nullptr) == -1) {
+        rdset = r_master;
+        wtset = w_master;
+        if(select(fdmax, &rdset, &wtset, nullptr, nullptr) == -1) {
             perror("select");
             exit(2);
         }
 
-        for(int i = 0; i < fdmax + 1; i++){
+        int max = fdmax + 1;
+        for(int i = 0; i < max; i++){
             if(FD_ISSET(i, &rdset)){
-                if(i == sd){
-                    sin_size = sizeof visiter;
-                    new_fd = accept(sd, (struct sockaddr *)&visiter, &sin_size);
-                    if (new_fd == -1) {
-                      perror("accept");
-                      continue;
-                    }
-
-                    fdmax = new_fd + 1;
-                    FD_SET(new_fd, &master);
-
-                    inet_ntop(visiter.ss_family, get_in_addr((struct sockaddr *)&visiter), ip, sizeof ip);
-                    std::cout << "server: got connection from " << ip << std::endl;
-
-                    if (!fork()) {
-                        close(sd);
-                        
-                        char buffer[BUF_SIZE];
-                        char* filename = "/Users/macbook/Projects/WebProgramming/NonBlockSocket/movie/src.mkv";
-                        std::ifstream file(filename, std::ios::binary);
-
-                        while(file.read(buffer, BUF_SIZE)) {
-                            if(send(new_fd, buffer, file.gcount(), MSG_DONTWAIT) == -1) {
-                                std::cerr << "Failed to send data" << std::endl;
-                                return 1;
-                            }
-                        }
-                        if(file.gcount() > 0) {
-                            if (send(new_fd, buffer, file.gcount(), 0) == -1) {
-                                std::cerr << "Failed to send data" << std::endl;
-                                return 1;
-                            }
-                        }
-
-                        // Close file and socket
-                        // Close file
-                        file.close();
-                        close(new_fd);
-                        exit(0);
-                    }
-                } else {
-                    // client
-                    
-                }   
+                // new connection
+                sin_size = sizeof visiter;
+                new_fd = accept(listener, (struct sockaddr *)&visiter, &sin_size);
+                if (new_fd == -1) {
+                  perror("accept");
+                  continue;
+                }
+                fdmax = new_fd + 1;
+                FD_SET(new_fd, &w_master);
+                fcntl(new_fd, F_SETFL, O_NONBLOCK);
+                inet_ntop(visiter.ss_family, get_in_addr((struct sockaddr *)&visiter), ip, sizeof ip);
+                std::cout << "server: got connection from " << ip << std::endl;
+            } else if(FD_ISSET(i, &wtset)){
+                std::thread td(client_handler, i);
+                FD_CLR(i, &w_master);
+                td.detach();
             }
         }
     }
